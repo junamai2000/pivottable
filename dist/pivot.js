@@ -629,7 +629,7 @@
      */
     PivotData = (function() {
       function PivotData(input, opts) {
-        var ref, ref1, ref2, ref3, ref4, ref5, ref6, ref7, ref8, ref9;
+        var ref, ref1, ref2, ref3, ref4, ref5, ref6, ref7, ref8, ref9, ref10;
         if (opts == null) {
           opts = {};
         }
@@ -651,12 +651,14 @@
         this.filter = (ref9 = opts.filter) != null ? ref9 : (function() {
           return true;
         });
+        this.formatterAttrs =  (ref10 = opts.formatters) != null ? ref10 : {};
         this.tree = {};
         this.rowKeys = [];
         this.colKeys = [];
         this.rowTotals = {};
         this.colTotals = {};
         this.allTotal = this.aggregator(this, [], []);
+        this.formatKeys = new Array(this.rowKeys.length);
         this.sorted = false;
         PivotData.forEachRecord(this.input, this.derivedAttributes, (function(_this) {
           return function(record) {
@@ -839,6 +841,9 @@
         for (n = 0, len2 = ref2.length; n < len2; n++) {
           x = ref2[n];
           rowKey.push((ref3 = record[x]) != null ? ref3 : "null");
+          if (this.formatterAttrs[x]) {
+            this.formatKeys[n] = this.formatterAttrs[x];
+          }
         }
         flatRowKey = rowKey.join(String.fromCharCode(0));
         flatColKey = colKey.join(String.fromCharCode(0));
@@ -910,7 +915,7 @@
     Default Renderer for hierarchical table layout
      */
     pivotTableRenderer = function(pivotData, opts) {
-      var aggregator, c, colAttrs, colKey, colKeys, defaults, getClickHandler, i, j, r, result, rowAttrs, rowKey, rowKeys, spanSize, tbody, td, th, thead, totalAggregator, tr, txt, val, x;
+      var aggregator, c, colAttrs, colKey, colKeys, defaults, getClickHandler, i, j, r, result, rowAttrs, rowKey, rowKeys, spanSize, tbody, td, th, thead, totalAggregator, tr, txt, val, x, formatKeys;
       defaults = {
         table: {
           clickCallback: null,
@@ -924,6 +929,7 @@
       opts = $.extend(true, {}, defaults, opts);
       colAttrs = pivotData.colAttrs;
       rowAttrs = pivotData.rowAttrs;
+      formatKeys = pivotData.formatKeys;
       rowKeys = pivotData.getRowKeys();
       colKeys = pivotData.getColKeys();
       if (opts.table.clickCallback) {
@@ -1049,7 +1055,12 @@
           if (x !== -1) {
             th = document.createElement("th");
             th.className = "pvtRowLabel";
-            th.textContent = txt;
+            var keyIndex = parseInt(j, 10);
+            if (formatKeys[keyIndex]) {
+              th.textContent = formatKeys[keyIndex](txt);
+            } else {
+              th.textContent = txt;
+            }
             th.setAttribute("rowspan", x);
             if (parseInt(j) === rowAttrs.length - 1 && colAttrs.length !== 0) {
               th.setAttribute("colspan", 2);
@@ -1145,6 +1156,7 @@
         cols: [],
         rows: [],
         vals: [],
+        formatters: {},
         rowOrder: "key_a_to_z",
         colOrder: "key_a_to_z",
         dataClass: PivotData,
@@ -1228,6 +1240,7 @@
         filter: function() {
           return true;
         },
+        formatters: {},
         sorters: {}
       };
       localeStrings = $.extend(true, {}, locales.en.localeStrings, locales[locale].localeStrings);
@@ -1553,6 +1566,7 @@
               sorters: opts.sorters,
               cols: [],
               rows: [],
+              formatters: opts.formatters,
               dataClass: opts.dataClass
             };
             numInputsToProcess = (ref4 = opts.aggregators[aggregator.val()]([])().numInputs) != null ? ref4 : 0;
@@ -1642,6 +1656,7 @@
               rows: subopts.rows,
               colOrder: subopts.colOrder,
               rowOrder: subopts.rowOrder,
+              formatters: subopts.formatters,
               vals: vals,
               exclusions: exclusions,
               inclusions: inclusions,
