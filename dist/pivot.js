@@ -629,7 +629,7 @@
      */
     PivotData = (function() {
       function PivotData(input, opts) {
-        var ref, ref1, ref2, ref3, ref4, ref5, ref6, ref7, ref8, ref9, ref10;
+        var ref, ref1, ref2, ref3, ref4, ref5, ref6, ref7, ref8, ref9, ref10, ref11;
         if (opts == null) {
           opts = {};
         }
@@ -652,13 +652,15 @@
           return true;
         });
         this.formatterAttrs =  (ref10 = opts.formatters) != null ? ref10 : {};
+        this.aggregatorFormatters =  (ref11 = opts.aggregatorFormatters) != null ? ref11 : {};
         this.tree = {};
         this.rowKeys = [];
         this.colKeys = [];
         this.rowTotals = {};
         this.colTotals = {};
         this.allTotal = this.aggregator(this, [], []);
-        this.formatKeys = new Array(this.rowKeys.length);
+        this.rowFormatKeys = new Array(this.rowKeys.length);
+        this.colFormatKeys = new Array(this.colKeys.length);
         this.sorted = false;
         PivotData.forEachRecord(this.input, this.derivedAttributes, (function(_this) {
           return function(record) {
@@ -836,14 +838,23 @@
         for (l = 0, len1 = ref.length; l < len1; l++) {
           x = ref[l];
           colKey.push((ref1 = record[x]) != null ? ref1 : "null");
+
+          // 表示形式指定のためのマッピング
+          if (this.formatterAttrs[x]) {
+            this.colFormatKeys[l] = this.formatterAttrs[x];
+          }
+
         }
         ref2 = this.rowAttrs;
         for (n = 0, len2 = ref2.length; n < len2; n++) {
           x = ref2[n];
           rowKey.push((ref3 = record[x]) != null ? ref3 : "null");
+
+          // 表示形式指定のためのマッピング
           if (this.formatterAttrs[x]) {
-            this.formatKeys[n] = this.formatterAttrs[x];
+            this.rowFormatKeys[n] = this.formatterAttrs[x];
           }
+
         }
         flatRowKey = rowKey.join(String.fromCharCode(0));
         flatColKey = colKey.join(String.fromCharCode(0));
@@ -915,7 +926,7 @@
     Default Renderer for hierarchical table layout
      */
     pivotTableRenderer = function(pivotData, opts) {
-      var aggregator, c, colAttrs, colKey, colKeys, defaults, getClickHandler, i, j, r, result, rowAttrs, rowKey, rowKeys, spanSize, tbody, td, th, thead, totalAggregator, tr, txt, val, x, formatKeys;
+      var aggregator, c, colAttrs, colKey, colKeys, defaults, getClickHandler, i, j, r, result, rowAttrs, rowKey, rowKeys, spanSize, tbody, td, th, thead, totalAggregator, tr, txt, val, x, rowFormatKeys, colFormatKeys, formatterAttrs, aggregatorFormatters;
       defaults = {
         table: {
           clickCallback: null,
@@ -929,7 +940,10 @@
       opts = $.extend(true, {}, defaults, opts);
       colAttrs = pivotData.colAttrs;
       rowAttrs = pivotData.rowAttrs;
-      formatKeys = pivotData.formatKeys;
+      rowFormatKeys = pivotData.rowFormatKeys;
+      colFormatKeys = pivotData.colFormatKeys;
+      formatterAttrs = pivotData.formatterAttrs;
+      aggregatorFormatters = pivotData.aggregatorFormatters;
       rowKeys = pivotData.getRowKeys();
       colKeys = pivotData.getColKeys();
       if (opts.table.clickCallback) {
@@ -1007,7 +1021,15 @@
           if (x !== -1) {
             th = document.createElement("th");
             th.className = "pvtColLabel";
-            th.textContent = colKey[j];
+
+            // 行の整形方式を保存
+            var keyIndex = parseInt(j, 10);
+            if (colFormatKeys[keyIndex]) {
+              th.textContent = colFormatKeys[keyIndex](colKey[j]);
+            } else {
+              th.textContent = colKey[j];
+            }
+
             th.setAttribute("colspan", x);
             if (parseInt(j) === colAttrs.length - 1 && rowAttrs.length !== 0) {
               th.setAttribute("rowspan", 2);
@@ -1055,12 +1077,15 @@
           if (x !== -1) {
             th = document.createElement("th");
             th.className = "pvtRowLabel";
+
+            // 行の整形方式を保存
             var keyIndex = parseInt(j, 10);
-            if (formatKeys[keyIndex]) {
-              th.textContent = formatKeys[keyIndex](txt);
+            if (rowFormatKeys[keyIndex]) {
+              th.textContent = rowFormatKeys[keyIndex](txt);
             } else {
               th.textContent = txt;
             }
+
             th.setAttribute("rowspan", x);
             if (parseInt(j) === rowAttrs.length - 1 && colAttrs.length !== 0) {
               th.setAttribute("colspan", 2);
@@ -1087,7 +1112,15 @@
           val = totalAggregator.value();
           td = document.createElement("td");
           td.className = "pvtTotal rowTotal";
-          td.textContent = totalAggregator.format(val);
+
+          // 合計列のフォーマット処理
+          const aggregatorTarget = aggregatorFormatters[pivotData.aggregatorName]
+          if (aggregatorTarget && pivotData.valAttrs.length === 1 && aggregatorTarget[pivotData.valAttrs[0]]) {
+            td.textContent = aggregatorTarget[pivotData.valAttrs[0]](totalAggregator.format(val));
+          } else {
+            td.textContent = totalAggregator.format(val);
+          }
+
           td.setAttribute("data-value", val);
           if (getClickHandler != null) {
             td.onclick = getClickHandler(val, rowKey, []);
@@ -1126,7 +1159,15 @@
           val = totalAggregator.value();
           td = document.createElement("td");
           td.className = "pvtGrandTotal";
-          td.textContent = totalAggregator.format(val);
+
+          // 合計列の合計フォーマット処理
+          const aggregatorTarget = aggregatorFormatters[pivotData.aggregatorName]
+          if (aggregatorTarget && pivotData.valAttrs.length === 1 && aggregatorTarget[pivotData.valAttrs[0]]) {
+            td.textContent = aggregatorTarget[pivotData.valAttrs[0]](totalAggregator.format(val));
+          } else {
+            td.textContent = totalAggregator.format(val);
+          }
+
           td.setAttribute("data-value", val);
           if (getClickHandler != null) {
             td.onclick = getClickHandler(val, [], []);
@@ -1157,6 +1198,7 @@
         rows: [],
         vals: [],
         formatters: {},
+        aggregatorFormatters: {},
         rowOrder: "key_a_to_z",
         colOrder: "key_a_to_z",
         dataClass: PivotData,
@@ -1241,6 +1283,7 @@
           return true;
         },
         formatters: {},
+        aggregatorFormatters: {},
         sorters: {}
       };
       localeStrings = $.extend(true, {}, locales.en.localeStrings, locales[locale].localeStrings);
@@ -1567,6 +1610,7 @@
               cols: [],
               rows: [],
               formatters: opts.formatters,
+              aggregatorFormatters: opts.aggregatorFormatters,
               dataClass: opts.dataClass
             };
             numInputsToProcess = (ref4 = opts.aggregators[aggregator.val()]([])().numInputs) != null ? ref4 : 0;
@@ -1657,6 +1701,7 @@
               colOrder: subopts.colOrder,
               rowOrder: subopts.rowOrder,
               formatters: subopts.formatters,
+              aggregatorFormatters: subopts.aggregatorFormatters,
               vals: vals,
               exclusions: exclusions,
               inclusions: inclusions,
